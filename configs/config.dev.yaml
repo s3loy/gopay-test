@@ -1,0 +1,22 @@
+app:
+  env: development
+  debug: true
+
+server:
+  port: 8080
+
+database:
+  host: localhost
+  port: 5432
+  dbname: gopay_dev
+
+log:
+  level: debug
+  format: console
+
+payment:
+  wechat:
+    enabled: false
+  alipay:
+    enabled: false
+    is_prod: false

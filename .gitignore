@@ -1,0 +1,61 @@
+# Binaries
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+bin/
+dist/
+
+# Test
+*.test
+*.out
+coverage.out
+coverage.html
+
+# Go
+vendor/
+go.work
+go.work.sum
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Env
+.env
+.env.local
+.env.*.local
+!.env.example
+
+# Configs with secrets
+configs/config.local.yaml
+
+# Logs
+*.log
+logs/
+
+# Database
+*.db
+*.sqlite
+
+# Frontend
+web/node_modules/
+web/.next/
+web/out/
+web/dist/
+web/*.tsbuildinfo
+
+# Wire generated (keep wire_gen.go in repo)
+# cmd/api/wire_gen.go
+
+# Temporary
+tmp/
+temp/

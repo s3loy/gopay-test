@@ -1,0 +1,52 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: gopay-postgres
+    environment:
+      POSTGRES_USER: gopay
+      POSTGRES_PASSWORD: gopay123
+      POSTGRES_DB: gopay
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U gopay"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  api:
+    build:
+      context: ../..
+      dockerfile: deployments/docker/Dockerfile
+    container_name: gopay-api
+    ports:
+      - "8080:8080"
+    environment:
+      GOPAY_DATABASE_HOST: postgres
+      GOPAY_DATABASE_PORT: 5432
+      GOPAY_DATABASE_USER: gopay
+      GOPAY_DATABASE_PASSWORD: gopay123
+      GOPAY_DATABASE_DBNAME: gopay
+    depends_on:
+      postgres:
+        condition: service_healthy
+    command: ["-config", "/app/configs/config.yaml"]
+
+  web:
+    build:
+      context: ../../web
+      dockerfile: Dockerfile
+    container_name: gopay-web
+    ports:
+      - "3000:3000"
+    environment:
+      NEXT_PUBLIC_API_URL: http://api:8080
+    depends_on:
+      - api
+
+volumes:
+  postgres_data:
