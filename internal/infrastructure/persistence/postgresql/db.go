@@ -35,6 +35,10 @@ func NewDB(cfg config.DatabaseConfig) (*gorm.DB, error) {
 	sqlDB.SetMaxIdleConns(cfg.MaxIdleConns)
 	sqlDB.SetConnMaxLifetime(cfg.ConnMaxLifetime)
 
+	if err := sqlDB.Ping(); err != nil {
+		return nil, fmt.Errorf("ping database: %w", err)
+	}
+
 	if err := autoMigrate(db); err != nil {
 		return nil, fmt.Errorf("auto migrate: %w", err)
 	}

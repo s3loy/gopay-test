@@ -17,9 +17,13 @@ func NewOrderRepository(db *gorm.DB) repository.OrderRepository {
 	return &orderRepo{db: db}
 }
 
+func (r *orderRepo) getDB(ctx context.Context) *gorm.DB {
+	return txFromContext(ctx, r.db)
+}
+
 func (r *orderRepo) Create(ctx context.Context, order *entity.Order) error {
 	m := toOrderModel(order)
-	if err := r.db.WithContext(ctx).Create(m).Error; err != nil {
+	if err := r.getDB(ctx).Create(m).Error; err != nil {
 		return apperror.Wrap(err, apperror.CodeDatabaseError)
 	}
 	order.ID = m.ID
@@ -28,7 +32,7 @@ func (r *orderRepo) Create(ctx context.Context, order *entity.Order) error {
 
 func (r *orderRepo) GetByID(ctx context.Context, id uint64) (*entity.Order, error) {
 	var m OrderModel
-	if err := r.db.WithContext(ctx).First(&m, id).Error; err != nil {
+	if err := r.getDB(ctx).First(&m, id).Error; err != nil {
 		if err == gorm.ErrRecordNotFound {
 			return nil, apperror.New(apperror.CodeOrderNotFound, "order not found")
 		}
@@ -39,7 +43,7 @@ func (r *orderRepo) GetByID(ctx context.Context, id uint64) (*entity.Order, erro
 
 func (r *orderRepo) GetByOrderNo(ctx context.Context, orderNo string) (*entity.Order, error) {
 	var m OrderModel
-	if err := r.db.WithContext(ctx).Where("order_no = ?", orderNo).First(&m).Error; err != nil {
+	if err := r.getDB(ctx).Where("order_no = ?", orderNo).First(&m).Error; err != nil {
 		if err == gorm.ErrRecordNotFound {
 			return nil, apperror.New(apperror.CodeOrderNotFound, "order not found")
 		}
@@ -50,14 +54,19 @@ func (r *orderRepo) GetByOrderNo(ctx context.Context, orderNo string) (*entity.O
 
 func (r *orderRepo) Update(ctx context.Context, order *entity.Order) error {
 	m := toOrderModel(order)
-	if err := r.db.WithContext(ctx).Model(&OrderModel{}).Where("id = ?", order.ID).Updates(m).Error; err != nil {
+	if err := r.getDB(ctx).Model(&OrderModel{}).Where("id = ?", order.ID).Select(
+		"status", "expired_at", "paid_at", "description", "metadata", "updated_at",
+	).Updates(m).Error; err != nil {
 		return apperror.Wrap(err, apperror.CodeDatabaseError)
 	}
 	return nil
 }
 
 func (r *orderRepo) UpdateStatus(ctx context.Context, id uint64, status entity.OrderStatus) error {
-	if err := r.db.WithContext(ctx).Model(&OrderModel{}).Where("id = ?", id).Update("status", int8(status)).Error; err != nil {
+	if err := r.getDB(ctx).Model(&OrderModel{}).Where("id = ?", id).Updates(map[string]any{
+		"status":     int8(status),
+		"updated_at": gorm.Expr("NOW()"),
+	}).Error; err != nil {
 		return apperror.Wrap(err, apperror.CodeDatabaseError)
 	}
 	return nil
@@ -65,7 +74,7 @@ func (r *orderRepo) UpdateStatus(ctx context.Context, id uint64, status entity.O
 
 func (r *orderRepo) List(ctx context.Context, filter repository.OrderFilter) ([]*entity.Order, int64, error) {
 	var total int64
-	query := r.db.WithContext(ctx).Model(&OrderModel{})
+	query := r.getDB(ctx).Model(&OrderModel{})
 	if filter.UserID > 0 {
 		query = query.Where("user_id = ?", filter.UserID)
 	}

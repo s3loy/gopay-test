@@ -17,9 +17,13 @@ func NewRefundRepository(db *gorm.DB) repository.RefundRepository {
 	return &refundRepo{db: db}
 }
 
+func (r *refundRepo) getDB(ctx context.Context) *gorm.DB {
+	return txFromContext(ctx, r.db)
+}
+
 func (r *refundRepo) Create(ctx context.Context, refund *entity.Refund) error {
 	m := toRefundModel(refund)
-	if err := r.db.WithContext(ctx).Create(m).Error; err != nil {
+	if err := r.getDB(ctx).Create(m).Error; err != nil {
 		return apperror.Wrap(err, apperror.CodeDatabaseError)
 	}
 	refund.ID = m.ID
@@ -28,7 +32,7 @@ func (r *refundRepo) Create(ctx context.Context, refund *entity.Refund) error {
 
 func (r *refundRepo) GetByID(ctx context.Context, id uint64) (*entity.Refund, error) {
 	var m RefundModel
-	if err := r.db.WithContext(ctx).First(&m, id).Error; err != nil {
+	if err := r.getDB(ctx).First(&m, id).Error; err != nil {
 		if err == gorm.ErrRecordNotFound {
 			return nil, apperror.New(apperror.CodeRefundNotFound, "refund not found")
 		}
@@ -39,7 +43,7 @@ func (r *refundRepo) GetByID(ctx context.Context, id uint64) (*entity.Refund, er
 
 func (r *refundRepo) GetByRefundNo(ctx context.Context, refundNo string) (*entity.Refund, error) {
 	var m RefundModel
-	if err := r.db.WithContext(ctx).Where("refund_no = ?", refundNo).First(&m).Error; err != nil {
+	if err := r.getDB(ctx).Where("refund_no = ?", refundNo).First(&m).Error; err != nil {
 		if err == gorm.ErrRecordNotFound {
 			return nil, apperror.New(apperror.CodeRefundNotFound, "refund not found")
 		}
@@ -50,7 +54,7 @@ func (r *refundRepo) GetByRefundNo(ctx context.Context, refundNo string) (*entit
 
 func (r *refundRepo) GetByPaymentID(ctx context.Context, paymentID uint64) ([]*entity.Refund, error) {
 	var ms []RefundModel
-	if err := r.db.WithContext(ctx).Where("payment_id = ?", paymentID).Find(&ms).Error; err != nil {
+	if err := r.getDB(ctx).Where("payment_id = ?", paymentID).Find(&ms).Error; err != nil {
 		return nil, apperror.Wrap(err, apperror.CodeDatabaseError)
 	}
 	refunds := make([]*entity.Refund, len(ms))
@@ -62,14 +66,19 @@ func (r *refundRepo) GetByPaymentID(ctx context.Context, paymentID uint64) ([]*e
 
 func (r *refundRepo) Update(ctx context.Context, refund *entity.Refund) error {
 	m := toRefundModel(refund)
-	if err := r.db.WithContext(ctx).Model(&RefundModel{}).Where("id = ?", refund.ID).Updates(m).Error; err != nil {
+	if err := r.getDB(ctx).Model(&RefundModel{}).Where("id = ?", refund.ID).Select(
+		"status", "third_party_no", "third_party_resp", "notify_at", "notify_count", "updated_at",
+	).Updates(m).Error; err != nil {
 		return apperror.Wrap(err, apperror.CodeDatabaseError)
 	}
 	return nil
 }
 
 func (r *refundRepo) UpdateStatus(ctx context.Context, id uint64, status entity.RefundStatus) error {
-	if err := r.db.WithContext(ctx).Model(&RefundModel{}).Where("id = ?", id).Update("status", int8(status)).Error; err != nil {
+	if err := r.getDB(ctx).Model(&RefundModel{}).Where("id = ?", id).Updates(map[string]any{
+		"status":     int8(status),
+		"updated_at": gorm.Expr("NOW()"),
+	}).Error; err != nil {
 		return apperror.Wrap(err, apperror.CodeDatabaseError)
 	}
 	return nil
@@ -77,7 +86,7 @@ func (r *refundRepo) UpdateStatus(ctx context.Context, id uint64, status entity.
 
 func (r *refundRepo) GetTotalRefundAmount(ctx context.Context, paymentID uint64) (int64, error) {
 	var total int64
-	if err := r.db.WithContext(ctx).Model(&RefundModel{}).
+	if err := r.getDB(ctx).Model(&RefundModel{}).
 		Where("payment_id = ? AND status = ?", paymentID, int8(entity.RefundStatusSuccess)).
 		Select("COALESCE(SUM(amount), 0)").
 		Scan(&total).Error; err != nil {
@@ -88,7 +97,7 @@ func (r *refundRepo) GetTotalRefundAmount(ctx context.Context, paymentID uint64)
 
 func (r *refundRepo) List(ctx context.Context, filter repository.RefundFilter) ([]*entity.Refund, int64, error) {
 	var total int64
-	query := r.db.WithContext(ctx).Model(&RefundModel{})
+	query := r.getDB(ctx).Model(&RefundModel{})
 	if filter.PaymentID > 0 {
 		query = query.Where("payment_id = ?", filter.PaymentID)
 	}

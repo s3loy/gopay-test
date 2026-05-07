@@ -17,9 +17,13 @@ func NewPaymentRepository(db *gorm.DB) repository.PaymentRepository {
 	return &paymentRepo{db: db}
 }
 
+func (r *paymentRepo) getDB(ctx context.Context) *gorm.DB {
+	return txFromContext(ctx, r.db)
+}
+
 func (r *paymentRepo) Create(ctx context.Context, payment *entity.Payment) error {
 	m := toPaymentModel(payment)
-	if err := r.db.WithContext(ctx).Create(m).Error; err != nil {
+	if err := r.getDB(ctx).Create(m).Error; err != nil {
 		return apperror.Wrap(err, apperror.CodeDatabaseError)
 	}
 	payment.ID = m.ID
@@ -28,7 +32,7 @@ func (r *paymentRepo) Create(ctx context.Context, payment *entity.Payment) error
 
 func (r *paymentRepo) GetByID(ctx context.Context, id uint64) (*entity.Payment, error) {
 	var m PaymentModel
-	if err := r.db.WithContext(ctx).First(&m, id).Error; err != nil {
+	if err := r.getDB(ctx).First(&m, id).Error; err != nil {
 		if err == gorm.ErrRecordNotFound {
 			return nil, apperror.New(apperror.CodePaymentNotFound, "payment not found")
 		}
@@ -39,7 +43,7 @@ func (r *paymentRepo) GetByID(ctx context.Context, id uint64) (*entity.Payment, 
 
 func (r *paymentRepo) GetByPaymentNo(ctx context.Context, paymentNo string) (*entity.Payment, error) {
 	var m PaymentModel
-	if err := r.db.WithContext(ctx).Where("payment_no = ?", paymentNo).First(&m).Error; err != nil {
+	if err := r.getDB(ctx).Where("payment_no = ?", paymentNo).First(&m).Error; err != nil {
 		if err == gorm.ErrRecordNotFound {
 			return nil, apperror.New(apperror.CodePaymentNotFound, "payment not found")
 		}
@@ -50,7 +54,7 @@ func (r *paymentRepo) GetByPaymentNo(ctx context.Context, paymentNo string) (*en
 
 func (r *paymentRepo) GetByThirdPartyNo(ctx context.Context, thirdPartyNo string) (*entity.Payment, error) {
 	var m PaymentModel
-	if err := r.db.WithContext(ctx).Where("third_party_no = ?", thirdPartyNo).First(&m).Error; err != nil {
+	if err := r.getDB(ctx).Where("third_party_no = ?", thirdPartyNo).First(&m).Error; err != nil {
 		if err == gorm.ErrRecordNotFound {
 			return nil, apperror.New(apperror.CodePaymentNotFound, "payment not found")
 		}
@@ -61,7 +65,7 @@ func (r *paymentRepo) GetByThirdPartyNo(ctx context.Context, thirdPartyNo string
 
 func (r *paymentRepo) GetByOrderID(ctx context.Context, orderID uint64) ([]*entity.Payment, error) {
 	var ms []PaymentModel
-	if err := r.db.WithContext(ctx).Where("order_id = ?", orderID).Find(&ms).Error; err != nil {
+	if err := r.getDB(ctx).Where("order_id = ?", orderID).Find(&ms).Error; err != nil {
 		return nil, apperror.Wrap(err, apperror.CodeDatabaseError)
 	}
 	payments := make([]*entity.Payment, len(ms))
@@ -73,14 +77,19 @@ func (r *paymentRepo) GetByOrderID(ctx context.Context, orderID uint64) ([]*enti
 
 func (r *paymentRepo) Update(ctx context.Context, payment *entity.Payment) error {
 	m := toPaymentModel(payment)
-	if err := r.db.WithContext(ctx).Model(&PaymentModel{}).Where("id = ?", payment.ID).Updates(m).Error; err != nil {
+	if err := r.getDB(ctx).Model(&PaymentModel{}).Where("id = ?", payment.ID).Select(
+		"status", "third_party_no", "third_party_resp", "paid_at", "notify_at", "notify_count", "expire_at", "updated_at",
+	).Updates(m).Error; err != nil {
 		return apperror.Wrap(err, apperror.CodeDatabaseError)
 	}
 	return nil
 }
 
 func (r *paymentRepo) UpdateStatus(ctx context.Context, id uint64, status entity.PaymentStatus) error {
-	if err := r.db.WithContext(ctx).Model(&PaymentModel{}).Where("id = ?", id).Update("status", int8(status)).Error; err != nil {
+	if err := r.getDB(ctx).Model(&PaymentModel{}).Where("id = ?", id).Updates(map[string]any{
+		"status":     int8(status),
+		"updated_at": gorm.Expr("NOW()"),
+	}).Error; err != nil {
 		return apperror.Wrap(err, apperror.CodeDatabaseError)
 	}
 	return nil
@@ -88,7 +97,7 @@ func (r *paymentRepo) UpdateStatus(ctx context.Context, id uint64, status entity
 
 func (r *paymentRepo) List(ctx context.Context, filter repository.PaymentFilter) ([]*entity.Payment, int64, error) {
 	var total int64
-	query := r.db.WithContext(ctx).Model(&PaymentModel{})
+	query := r.getDB(ctx).Model(&PaymentModel{})
 	if filter.OrderID > 0 {
 		query = query.Where("order_id = ?", filter.OrderID)
 	}

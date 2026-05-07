@@ -54,3 +54,7 @@ func (c *Client) V3() *wechatv3.ClientV3 {
 func (c *Client) NotifyURL() string {
 	return c.cfg.NotifyURL
 }
+
+func (c *Client) AppID() string {
+	return c.cfg.AppID
+}
