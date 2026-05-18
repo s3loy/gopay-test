@@ -66,10 +66,13 @@ func main() {
 	paymentRepo := postgresql.NewPaymentRepository(db)
 	refundRepo := postgresql.NewRefundRepository(db)
 
+	// Init transaction manager
+	txMgr := postgresql.NewTransactionManager(db)
+
 	// Init usecases
 	orderUC := usecase.NewOrderUsecase(orderRepo)
-	paymentUC := usecase.NewPaymentUsecase(orderRepo, paymentRepo, providerFact)
-	refundUC := usecase.NewRefundUsecase(paymentRepo, refundRepo, providerFact)
+	paymentUC := usecase.NewPaymentUsecase(orderRepo, paymentRepo, providerFact, txMgr)
+	refundUC := usecase.NewRefundUsecase(paymentRepo, refundRepo, providerFact, txMgr)
 
 	// Init handlers
 	orderHandler := handler.NewOrderHandler(orderUC)
@@ -79,7 +82,7 @@ func main() {
 	healthHandler := handler.NewHealthHandler()
 
 	// Init router
-	r := router.NewRouter(orderHandler, paymentHandler, refundHandler, webhookHandler, healthHandler)
+	r := router.NewRouter(orderHandler, paymentHandler, refundHandler, webhookHandler, healthHandler, cfg.App.CORSOrigins)
 
 	// Setup gin
 	if cfg.App.Env == "production" {

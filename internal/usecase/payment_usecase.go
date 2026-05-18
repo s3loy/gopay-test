@@ -36,17 +36,20 @@ type paymentUsecase struct {
 	orderRepo    repository.OrderRepository
 	paymentRepo  repository.PaymentRepository
 	providerFact service.PaymentProviderFactory
+	txMgr        repository.TransactionManager
 }
 
 func NewPaymentUsecase(
 	orderRepo repository.OrderRepository,
 	paymentRepo repository.PaymentRepository,
 	providerFact service.PaymentProviderFactory,
+	txMgr repository.TransactionManager,
 ) PaymentUsecase {
 	return &paymentUsecase{
 		orderRepo:    orderRepo,
 		paymentRepo:  paymentRepo,
 		providerFact: providerFact,
+		txMgr:        txMgr,
 	}
 }
 
@@ -66,6 +69,9 @@ func (u *paymentUsecase) Create(ctx context.Context, req CreatePaymentRequest) (
 
 	if req.ExpireMinutes <= 0 {
 		req.ExpireMinutes = 30
+	}
+	if req.ExpireMinutes > 1440 {
+		req.ExpireMinutes = 1440
 	}
 
 	payment := &entity.Payment{
@@ -101,7 +107,9 @@ func (u *paymentUsecase) Create(ctx context.Context, req CreatePaymentRequest) (
 		ExpireMinutes: req.ExpireMinutes,
 	})
 	if err != nil {
-		_ = u.paymentRepo.UpdateStatus(ctx, payment.ID, entity.PaymentStatusFailed)
+		if upErr := u.paymentRepo.UpdateStatus(ctx, payment.ID, entity.PaymentStatusFailed); upErr != nil {
+			logger.L().Error("update payment status to failed failed", zap.Error(upErr), zap.String("payment_no", payment.PaymentNo))
+		}
 		return nil, nil, err
 	}
 
@@ -110,8 +118,15 @@ func (u *paymentUsecase) Create(ctx context.Context, req CreatePaymentRequest) (
 	}
 	payment.ThirdPartyResp = result.RawResponse
 	if err := u.paymentRepo.Update(ctx, payment); err != nil {
-		logger.L().Warn("update payment after create failed", zap.Error(err))
+		logger.L().Warn("update payment after create failed", zap.Error(err), zap.String("payment_no", payment.PaymentNo))
 	}
+
+	logger.L().Info("payment created",
+		zap.String("payment_no", payment.PaymentNo),
+		zap.String("order_no", order.OrderNo),
+		zap.String("channel", string(req.Channel)),
+		zap.String("method", string(req.Method)),
+	)
 
 	return payment, result.PayParams, nil
 }
@@ -128,6 +143,7 @@ func (u *paymentUsecase) HandleWechatNotify(ctx context.Context, body []byte, he
 
 	result, err := provider.VerifyNotify(ctx, body, headers)
 	if err != nil {
+		logger.L().Error("wechat notify verify failed", zap.Error(err))
 		return err
 	}
 
@@ -135,32 +151,52 @@ func (u *paymentUsecase) HandleWechatNotify(ctx context.Context, body []byte, he
 	tradeState := result["trade_state"]
 	transactionID := result["transaction_id"]
 
-	payment, err := u.paymentRepo.GetByPaymentNo(ctx, outTradeNo)
-	if err != nil {
-		return err
-	}
+	logger.L().Info("wechat notify received",
+		zap.String("out_trade_no", outTradeNo),
+		zap.String("trade_state", tradeState),
+		zap.String("transaction_id", transactionID),
+	)
 
-	if payment.Status == entity.PaymentStatusSuccess {
-		return nil
-	}
-
-	if tradeState == "SUCCESS" {
-		payment.Status = entity.PaymentStatusSuccess
-		payment.ThirdPartyNo = transactionID
-		now := time.Now()
-		payment.PaidAt = &now
-		if err := u.paymentRepo.Update(ctx, payment); err != nil {
+	return u.txMgr.WithTransaction(ctx, func(txCtx context.Context) error {
+		payment, err := u.paymentRepo.GetByPaymentNo(txCtx, outTradeNo)
+		if err != nil {
 			return err
 		}
 
-		order, _ := u.orderRepo.GetByID(ctx, payment.OrderID)
-		if order != nil {
-			_ = order.MarkPaid()
-			_ = u.orderRepo.UpdateStatus(ctx, order.ID, entity.OrderStatusPaid)
+		if payment.Status == entity.PaymentStatusSuccess {
+			logger.L().Warn("wechat notify duplicate", zap.String("payment_no", payment.PaymentNo))
+			return nil
 		}
-	}
 
-	return nil
+		if tradeState == "SUCCESS" {
+			payment.Status = entity.PaymentStatusSuccess
+			payment.ThirdPartyNo = transactionID
+			now := time.Now()
+			payment.PaidAt = &now
+			if err := u.paymentRepo.Update(txCtx, payment); err != nil {
+				return err
+			}
+
+			order, err := u.orderRepo.GetByID(txCtx, payment.OrderID)
+			if err != nil {
+				return err
+			}
+			if err := order.MarkPaid(); err != nil {
+				return err
+			}
+			if err := u.orderRepo.UpdateStatus(txCtx, order.ID, entity.OrderStatusPaid); err != nil {
+				return err
+			}
+
+			logger.L().Info("payment success via wechat notify",
+				zap.String("payment_no", payment.PaymentNo),
+				zap.String("order_no", order.OrderNo),
+				zap.String("transaction_id", transactionID),
+			)
+		}
+
+		return nil
+	})
 }
 
 func (u *paymentUsecase) HandleAlipayNotify(ctx context.Context, params map[string]string) error {
@@ -171,6 +207,7 @@ func (u *paymentUsecase) HandleAlipayNotify(ctx context.Context, params map[stri
 
 	result, err := provider.VerifyNotify(ctx, nil, params)
 	if err != nil {
+		logger.L().Error("alipay notify verify failed", zap.Error(err))
 		return err
 	}
 
@@ -178,32 +215,52 @@ func (u *paymentUsecase) HandleAlipayNotify(ctx context.Context, params map[stri
 	tradeStatus := result["trade_status"]
 	tradeNo := result["trade_no"]
 
-	payment, err := u.paymentRepo.GetByPaymentNo(ctx, outTradeNo)
-	if err != nil {
-		return err
-	}
+	logger.L().Info("alipay notify received",
+		zap.String("out_trade_no", outTradeNo),
+		zap.String("trade_status", tradeStatus),
+		zap.String("trade_no", tradeNo),
+	)
 
-	if payment.Status == entity.PaymentStatusSuccess {
-		return nil
-	}
-
-	if tradeStatus == "TRADE_SUCCESS" || tradeStatus == "TRADE_FINISHED" {
-		payment.Status = entity.PaymentStatusSuccess
-		payment.ThirdPartyNo = tradeNo
-		now := time.Now()
-		payment.PaidAt = &now
-		if err := u.paymentRepo.Update(ctx, payment); err != nil {
+	return u.txMgr.WithTransaction(ctx, func(txCtx context.Context) error {
+		payment, err := u.paymentRepo.GetByPaymentNo(txCtx, outTradeNo)
+		if err != nil {
 			return err
 		}
 
-		order, _ := u.orderRepo.GetByID(ctx, payment.OrderID)
-		if order != nil {
-			_ = order.MarkPaid()
-			_ = u.orderRepo.UpdateStatus(ctx, order.ID, entity.OrderStatusPaid)
+		if payment.Status == entity.PaymentStatusSuccess {
+			logger.L().Warn("alipay notify duplicate", zap.String("payment_no", payment.PaymentNo))
+			return nil
 		}
-	}
 
-	return nil
+		if tradeStatus == "TRADE_SUCCESS" || tradeStatus == "TRADE_FINISHED" {
+			payment.Status = entity.PaymentStatusSuccess
+			payment.ThirdPartyNo = tradeNo
+			now := time.Now()
+			payment.PaidAt = &now
+			if err := u.paymentRepo.Update(txCtx, payment); err != nil {
+				return err
+			}
+
+			order, err := u.orderRepo.GetByID(txCtx, payment.OrderID)
+			if err != nil {
+				return err
+			}
+			if err := order.MarkPaid(); err != nil {
+				return err
+			}
+			if err := u.orderRepo.UpdateStatus(txCtx, order.ID, entity.OrderStatusPaid); err != nil {
+				return err
+			}
+
+			logger.L().Info("payment success via alipay notify",
+				zap.String("payment_no", payment.PaymentNo),
+				zap.String("order_no", order.OrderNo),
+				zap.String("trade_no", tradeNo),
+			)
+		}
+
+		return nil
+	})
 }
 
 func generatePaymentNo() string {

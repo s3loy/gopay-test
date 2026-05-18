@@ -8,6 +8,8 @@ import (
 	"github.com/s3loy/gopay/internal/domain/entity"
 	"github.com/s3loy/gopay/internal/domain/repository"
 	"github.com/s3loy/gopay/internal/pkg/apperror"
+	"github.com/s3loy/gopay/internal/pkg/logger"
+	"go.uber.org/zap"
 )
 
 type OrderUsecase interface {
@@ -34,6 +36,9 @@ func (u *orderUsecase) Create(ctx context.Context, userID uint64, subject string
 	if expireMinutes <= 0 {
 		expireMinutes = 30
 	}
+	if expireMinutes > 1440 {
+		expireMinutes = 1440
+	}
 
 	order := &entity.Order{
 		OrderNo:     generateOrderNo(),
@@ -50,6 +55,13 @@ func (u *orderUsecase) Create(ctx context.Context, userID uint64, subject string
 	if err := u.orderRepo.Create(ctx, order); err != nil {
 		return nil, err
 	}
+
+	logger.L().Info("order created",
+		zap.String("order_no", order.OrderNo),
+		zap.Uint64("user_id", userID),
+		zap.Int64("amount", amount),
+	)
+
 	return order, nil
 }
 

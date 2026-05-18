@@ -18,10 +18,11 @@ type Config struct {
 }
 
 type AppConfig struct {
-	Name    string `mapstructure:"name"`
-	Version string `mapstructure:"version"`
-	Env     string `mapstructure:"env"`
-	Debug   bool   `mapstructure:"debug"`
+	Name       string   `mapstructure:"name"`
+	Version    string   `mapstructure:"version"`
+	Env        string   `mapstructure:"env"`
+	Debug      bool     `mapstructure:"debug"`
+	CORSOrigins []string `mapstructure:"cors_origins"`
 }
 
 type ServerConfig struct {
@@ -75,6 +76,7 @@ type PaymentConfig struct {
 
 type WechatConfig struct {
 	Enabled        bool   `mapstructure:"enabled"`
+	AppID          string `mapstructure:"appid"`
 	MchID          string `mapstructure:"mchid"`
 	SerialNo       string `mapstructure:"serial_no"`
 	APIV3Key       string `mapstructure:"api_v3_key"`
