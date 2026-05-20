@@ -14,6 +14,7 @@ type Router struct {
 	refundHandler  *handler.RefundHandler
 	webhookHandler *handler.WebhookHandler
 	healthHandler  *handler.HealthHandler
+	corsOrigins    []string
 }
 
 func NewRouter(
@@ -22,6 +23,7 @@ func NewRouter(
 	refundHandler *handler.RefundHandler,
 	webhookHandler *handler.WebhookHandler,
 	healthHandler *handler.HealthHandler,
+	corsOrigins []string,
 ) *Router {
 	return &Router{
 		orderHandler:   orderHandler,
@@ -29,13 +31,14 @@ func NewRouter(
 		refundHandler:  refundHandler,
 		webhookHandler: webhookHandler,
 		healthHandler:  healthHandler,
+		corsOrigins:    corsOrigins,
 	}
 }
 
 func (r *Router) Register(e *gin.Engine) {
 	e.Use(middleware.Recovery())
 	e.Use(middleware.RequestID())
-	e.Use(middleware.CORS())
+	e.Use(middleware.CORS(r.corsOrigins))
 	e.Use(middleware.Timeout(30 * time.Second))
 	e.Use(middleware.Logger())
 
