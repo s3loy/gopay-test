@@ -75,6 +75,9 @@ func (c *Client) PublicKey() string {
 	if c.cfg.PublicKeyPath == "" {
 		return ""
 	}
-	data, _ := os.ReadFile(c.cfg.PublicKeyPath)
+	data, err := os.ReadFile(c.cfg.PublicKeyPath)
+	if err != nil {
+		return ""
+	}
 	return string(data)
 }

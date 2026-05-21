@@ -19,7 +19,6 @@ type mockPaymentRepo struct {
 	created       *entity.Payment
 	updated       bool
 	statusUpdated bool
-	totalRefund   int64
 }
 
 func (m *mockPaymentRepo) Create(ctx context.Context, p *entity.Payment) error {
