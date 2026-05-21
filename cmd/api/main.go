@@ -40,7 +40,9 @@ func main() {
 		fmt.Fprintf(os.Stderr, "init logger failed: %v\n", err)
 		os.Exit(1)
 	}
-	defer log.Sync()
+	defer func() {
+		_ = log.Sync() //nolint:errcheck // sync error is safe to ignore during shutdown
+	}()
 
 	// Init database
 	db, err := postgresql.NewDB(cfg.Database)
