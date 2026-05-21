@@ -7,16 +7,16 @@ import (
 )
 
 type ProviderPaymentRequest struct {
-	OrderNo     string
-	Subject     string
-	Amount      int64
-	Currency    string
-	Method      entity.PaymentMethod
-	ClientIP    string
-	NotifyURL   string
-	ReturnURL   string
-	OpenID      string // WeChat JSAPI
-	BuyerID     string // Alipay WAP
+	OrderNo       string
+	Subject       string
+	Amount        int64
+	Currency      string
+	Method        entity.PaymentMethod
+	ClientIP      string
+	NotifyURL     string
+	ReturnURL     string
+	OpenID        string // WeChat JSAPI
+	BuyerID       string // Alipay WAP
 	ExpireMinutes int
 }
 

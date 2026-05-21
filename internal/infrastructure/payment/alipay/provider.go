@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"net/url"
 	"strconv"
 
 	"github.com/go-pay/gopay"
@@ -167,7 +168,37 @@ func (p *provider) VerifyNotify(ctx context.Context, body []byte, headers map[st
 	if !p.client.IsAvailable() {
 		return nil, apperror.New(apperror.CodeAlipayAPICallFailed, "alipay client not available")
 	}
-	return headers, nil
+
+	publicKey := p.client.PublicKey()
+	if publicKey == "" {
+		return nil, apperror.New(apperror.CodeAlipayCertError, "alipay public key not configured")
+	}
+
+	values := make(url.Values)
+	for k, v := range headers {
+		values.Set(k, v)
+	}
+
+	notifyReq, err := alipay.ParseNotifyByURLValues(values)
+	if err != nil {
+		return nil, apperror.Wrap(err, apperror.CodeWebhookInvalidSignature)
+	}
+
+	ok, err := alipay.VerifySign(publicKey, notifyReq)
+	if err != nil {
+		return nil, apperror.Wrap(err, apperror.CodeWebhookInvalidSignature)
+	}
+	if !ok {
+		return nil, apperror.New(apperror.CodeWebhookInvalidSignature, "alipay signature verification failed")
+	}
+
+	result := make(map[string]string)
+	for k, v := range notifyReq {
+		if s, ok := v.(string); ok {
+			result[k] = s
+		}
+	}
+	return result, nil
 }
 
 func ParseAlipayNotify(req *http.Request, publicKey string) (map[string]string, error) {

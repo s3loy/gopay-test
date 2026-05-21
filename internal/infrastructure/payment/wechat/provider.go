@@ -4,6 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strconv"
+	"time"
 
 	"github.com/go-pay/gopay"
 	wechatv3 "github.com/go-pay/gopay/wechat/v3"
@@ -31,8 +33,13 @@ func (p *provider) CreatePayment(ctx context.Context, req service.ProviderPaymen
 		return nil, apperror.New(apperror.CodeWeChatAPICallFailed, "wechat client not available")
 	}
 
+	appID := p.client.AppID()
+	if appID == "" {
+		return nil, apperror.New(apperror.CodeWeChatAPICallFailed, "wechat appid not configured")
+	}
+
 	bm := make(gopay.BodyMap)
-	bm.Set("appid", "wx_appid_placeholder").
+	bm.Set("appid", appID).
 		Set("description", req.Subject).
 		Set("out_trade_no", req.OrderNo).
 		Set("notify_url", req.NotifyURL).
@@ -73,7 +80,7 @@ func (p *provider) CreatePayment(ctx context.Context, req service.ProviderPaymen
 		if wxRsp.Code != wechatv3.Success {
 			return nil, apperror.New(apperror.CodeWeChatAPICallFailed, wxRsp.Error)
 		}
-		jsapi, err := p.client.V3().PaySignOfJSAPI("wx_appid_placeholder", wxRsp.Response.PrepayId)
+		jsapi, err := p.client.V3().PaySignOfJSAPI(appID, wxRsp.Response.PrepayId)
 		if err != nil {
 			return nil, apperror.Wrap(err, apperror.CodeWeChatAPICallFailed)
 		}
@@ -182,6 +189,18 @@ func (p *provider) VerifyNotify(ctx context.Context, body []byte, headers map[st
 		return nil, apperror.New(apperror.CodeWeChatAPICallFailed, "wechat client not available")
 	}
 
+	// Basic anti-replay: verify timestamp is within 5 minutes
+	timestamp := headers["Wechatpay-Timestamp"]
+	if timestamp != "" {
+		ts, err := strconv.ParseInt(timestamp, 10, 64)
+		if err == nil {
+			now := time.Now().Unix()
+			if now-ts > 300 || ts-now > 300 {
+				return nil, apperror.New(apperror.CodeWebhookInvalidSignature, "wechat notify timestamp expired")
+			}
+		}
+	}
+
 	var notifyReq wechatv3.V3NotifyReq
 	if err := json.Unmarshal(body, &notifyReq); err != nil {
 		return nil, apperror.Wrap(err, apperror.CodeWebhookInvalidSignature)
@@ -193,8 +212,8 @@ func (p *provider) VerifyNotify(ctx context.Context, body []byte, headers map[st
 	}
 
 	return map[string]string{
-		"out_trade_no":  result.OutTradeNo,
+		"out_trade_no":   result.OutTradeNo,
 		"transaction_id": result.TransactionId,
-		"trade_state":   result.TradeState,
+		"trade_state":    result.TradeState,
 	}, nil
 }

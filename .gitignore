@@ -4,8 +4,12 @@
 *.dll
 *.so
 *.dylib
+/api
 bin/
 dist/
+
+# Certificates
+/certs/
 
 # Test
 *.test

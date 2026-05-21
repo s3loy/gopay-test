@@ -2,7 +2,6 @@ package apperror
 
 import (
 	"fmt"
-	"net/http"
 )
 
 type AppError struct {
@@ -28,7 +27,7 @@ func New(code int, message string) *AppError {
 	return &AppError{
 		Code:       code,
 		Message:    message,
-		HTTPStatus: http.StatusInternalServerError,
+		HTTPStatus: GetHTTPStatus(code),
 	}
 }
 

@@ -37,8 +37,8 @@ type OrderModel struct {
 	Status      int8      `gorm:"index:idx_orders_status_created;not null"`
 	ExpiredAt   time.Time `gorm:"not null"`
 	PaidAt      *time.Time
-	Description string    `gorm:"size:512"`
-	Metadata    JSONMap   `gorm:"type:jsonb;default:'{}'"`
+	Description string  `gorm:"size:512"`
+	Metadata    JSONMap `gorm:"type:jsonb;default:'{}'"`
 	CreatedAt   time.Time
 	UpdatedAt   time.Time
 }
@@ -48,24 +48,24 @@ func (OrderModel) TableName() string {
 }
 
 type PaymentModel struct {
-	ID             uint64    `gorm:"primaryKey;autoIncrement"`
-	PaymentNo      string    `gorm:"uniqueIndex;size:32;not null"`
-	OrderID        uint64    `gorm:"index:idx_payments_order_id;not null"`
-	OrderNo        string    `gorm:"size:32;not null"`
-	Channel        string    `gorm:"index:idx_payments_status_channel;size:16;not null"`
-	Method         string    `gorm:"size:16;not null"`
-	Amount         int64     `gorm:"not null"`
-	Currency       string    `gorm:"size:3;default:'CNY';not null"`
-	Status         int8      `gorm:"index:idx_payments_status_created;not null"`
-	ThirdPartyNo   string    `gorm:"index:idx_payments_third_party;size:64"`
-	ThirdPartyResp JSONMap   `gorm:"type:jsonb;default:'{}'"`
-	ClientIP       string    `gorm:"size:64"`
+	ID             uint64  `gorm:"primaryKey;autoIncrement"`
+	PaymentNo      string  `gorm:"uniqueIndex;size:32;not null"`
+	OrderID        uint64  `gorm:"index:idx_payments_order_id;not null"`
+	OrderNo        string  `gorm:"size:32;not null"`
+	Channel        string  `gorm:"index:idx_payments_status_channel;size:16;not null"`
+	Method         string  `gorm:"size:16;not null"`
+	Amount         int64   `gorm:"not null"`
+	Currency       string  `gorm:"size:3;default:'CNY';not null"`
+	Status         int8    `gorm:"index:idx_payments_status_created;not null"`
+	ThirdPartyNo   string  `gorm:"index:idx_payments_third_party;size:64"`
+	ThirdPartyResp JSONMap `gorm:"type:jsonb;default:'{}'"`
+	ClientIP       string  `gorm:"size:64"`
 	NotifyURL      string
 	ReturnURL      string
 	ExpireAt       time.Time `gorm:"not null"`
 	PaidAt         *time.Time
 	NotifyAt       *time.Time
-	NotifyCount    int16     `gorm:"default:0"`
+	NotifyCount    int16 `gorm:"default:0"`
 	CreatedAt      time.Time
 	UpdatedAt      time.Time
 }
@@ -75,20 +75,20 @@ func (PaymentModel) TableName() string {
 }
 
 type RefundModel struct {
-	ID             uint64    `gorm:"primaryKey;autoIncrement"`
-	RefundNo       string    `gorm:"uniqueIndex;size:32;not null"`
-	PaymentID      uint64    `gorm:"index:idx_refunds_payment_id;not null"`
-	PaymentNo      string    `gorm:"size:32;not null"`
-	OrderID        uint64    `gorm:"index:idx_refunds_order_id;not null"`
-	OrderNo        string    `gorm:"size:32;not null"`
-	Channel        string    `gorm:"index:idx_refunds_status_channel;size:16;not null"`
-	Amount         int64     `gorm:"not null"`
-	Reason         string    `gorm:"size:256;not null"`
-	Status         int8      `gorm:"not null"`
-	ThirdPartyNo   string    `gorm:"size:64"`
-	ThirdPartyResp JSONMap   `gorm:"type:jsonb;default:'{}'"`
+	ID             uint64  `gorm:"primaryKey;autoIncrement"`
+	RefundNo       string  `gorm:"uniqueIndex;size:32;not null"`
+	PaymentID      uint64  `gorm:"index:idx_refunds_payment_id;not null"`
+	PaymentNo      string  `gorm:"size:32;not null"`
+	OrderID        uint64  `gorm:"index:idx_refunds_order_id;not null"`
+	OrderNo        string  `gorm:"size:32;not null"`
+	Channel        string  `gorm:"index:idx_refunds_status_channel;size:16;not null"`
+	Amount         int64   `gorm:"not null"`
+	Reason         string  `gorm:"size:256;not null"`
+	Status         int8    `gorm:"not null"`
+	ThirdPartyNo   string  `gorm:"size:64"`
+	ThirdPartyResp JSONMap `gorm:"type:jsonb;default:'{}'"`
 	NotifyAt       *time.Time
-	NotifyCount    int16     `gorm:"default:0"`
+	NotifyCount    int16 `gorm:"default:0"`
 	CreatedAt      time.Time
 	UpdatedAt      time.Time
 }

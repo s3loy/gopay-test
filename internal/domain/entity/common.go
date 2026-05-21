@@ -40,6 +40,7 @@ const (
 	PaymentStatusFailed     PaymentStatus = 2
 	PaymentStatusCancelled  PaymentStatus = 3
 	PaymentStatusProcessing PaymentStatus = 4
+	PaymentStatusRefunded   PaymentStatus = 5
 )
 
 func (s PaymentStatus) String() string {
@@ -54,6 +55,8 @@ func (s PaymentStatus) String() string {
 		return "cancelled"
 	case PaymentStatusProcessing:
 		return "processing"
+	case PaymentStatusRefunded:
+		return "refunded"
 	default:
 		return fmt.Sprintf("unknown(%d)", s)
 	}

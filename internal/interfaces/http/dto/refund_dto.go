@@ -7,12 +7,12 @@ type CreateRefundRequest struct {
 }
 
 type RefundResponse struct {
-	RefundNo   string `json:"refund_no"`
-	PaymentNo  string `json:"payment_no"`
-	OrderNo    string `json:"order_no"`
-	Channel    string `json:"channel"`
-	Amount     int64  `json:"amount"`
-	Reason     string `json:"reason"`
-	Status     string `json:"status"`
-	CreatedAt  int64  `json:"created_at"`
+	RefundNo  string `json:"refund_no"`
+	PaymentNo string `json:"payment_no"`
+	OrderNo   string `json:"order_no"`
+	Channel   string `json:"channel"`
+	Amount    int64  `json:"amount"`
+	Reason    string `json:"reason"`
+	Status    string `json:"status"`
+	CreatedAt int64  `json:"created_at"`
 }

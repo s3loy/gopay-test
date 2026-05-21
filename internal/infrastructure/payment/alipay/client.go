@@ -2,6 +2,7 @@ package alipay
 
 import (
 	"os"
+	"strings"
 
 	alipayv3 "github.com/go-pay/gopay/alipay/v3"
 	"github.com/s3loy/gopay/internal/pkg/apperror"
@@ -18,12 +19,21 @@ func NewClient(cfg config.AlipayConfig) (*Client, error) {
 		return nil, nil
 	}
 
-	privateKey, err := os.ReadFile(cfg.PrivateKeyPath)
+	privateKeyBytes, err := os.ReadFile(cfg.PrivateKeyPath)
 	if err != nil {
 		return nil, apperror.Wrap(err, apperror.CodeAlipayCertError).WithDetail("path", cfg.PrivateKeyPath)
 	}
 
-	client, err := alipayv3.NewClientV3(cfg.AppID, string(privateKey), cfg.IsProd)
+	// gopay's FormatAlipayPrivateKey adds PEM headers, so strip them first
+	privateKey := strings.TrimSpace(string(privateKeyBytes))
+	privateKey = strings.TrimPrefix(privateKey, "-----BEGIN RSA PRIVATE KEY-----")
+	privateKey = strings.TrimPrefix(privateKey, "-----BEGIN PRIVATE KEY-----")
+	privateKey = strings.TrimSuffix(privateKey, "-----END RSA PRIVATE KEY-----")
+	privateKey = strings.TrimSuffix(privateKey, "-----END PRIVATE KEY-----")
+	privateKey = strings.ReplaceAll(privateKey, "\n", "")
+	privateKey = strings.TrimSpace(privateKey)
+
+	client, err := alipayv3.NewClientV3(cfg.AppID, privateKey, cfg.IsProd)
 	if err != nil {
 		return nil, apperror.Wrap(err, apperror.CodeAlipayCertError)
 	}
@@ -65,6 +75,9 @@ func (c *Client) PublicKey() string {
 	if c.cfg.PublicKeyPath == "" {
 		return ""
 	}
-	data, _ := os.ReadFile(c.cfg.PublicKeyPath)
+	data, err := os.ReadFile(c.cfg.PublicKeyPath)
+	if err != nil {
+		return ""
+	}
 	return string(data)
 }

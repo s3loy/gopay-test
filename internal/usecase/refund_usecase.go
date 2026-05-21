@@ -9,6 +9,8 @@ import (
 	"github.com/s3loy/gopay/internal/domain/repository"
 	"github.com/s3loy/gopay/internal/domain/service"
 	"github.com/s3loy/gopay/internal/pkg/apperror"
+	"github.com/s3loy/gopay/internal/pkg/logger"
+	"go.uber.org/zap"
 )
 
 type CreateRefundRequest struct {
@@ -26,17 +28,20 @@ type refundUsecase struct {
 	paymentRepo  repository.PaymentRepository
 	refundRepo   repository.RefundRepository
 	providerFact service.PaymentProviderFactory
+	txMgr        repository.TransactionManager
 }
 
 func NewRefundUsecase(
 	paymentRepo repository.PaymentRepository,
 	refundRepo repository.RefundRepository,
 	providerFact service.PaymentProviderFactory,
+	txMgr repository.TransactionManager,
 ) RefundUsecase {
 	return &refundUsecase{
 		paymentRepo:  paymentRepo,
 		refundRepo:   refundRepo,
 		providerFact: providerFact,
+		txMgr:        txMgr,
 	}
 }
 
@@ -96,22 +101,35 @@ func (u *refundUsecase) Create(ctx context.Context, req CreateRefundRequest) (*e
 		NotifyURL:    "",
 	})
 	if err != nil {
-		_ = u.refundRepo.UpdateStatus(ctx, refund.ID, entity.RefundStatusFailed)
+		if upErr := u.refundRepo.UpdateStatus(ctx, refund.ID, entity.RefundStatusFailed); upErr != nil {
+			logger.L().Error("update refund status to failed failed", zap.Error(upErr), zap.String("refund_no", refund.RefundNo))
+		}
 		return nil, err
 	}
 
 	refund.ThirdPartyNo = result.ThirdPartyNo
 	refund.ThirdPartyResp = result.RawResponse
-	refund.Status = entity.RefundStatusSuccess
+	refund.Status = entity.RefundStatusProcessing
 	if err := u.refundRepo.Update(ctx, refund); err != nil {
 		return nil, err
 	}
 
-	// Update order status if fully refunded
-	totalRefunded, _ = u.refundRepo.GetTotalRefundAmount(ctx, payment.ID)
-	if totalRefunded >= payment.Amount {
-		_ = u.paymentRepo.UpdateStatus(ctx, payment.ID, entity.PaymentStatusFailed)
+	totalRefunded, err = u.refundRepo.GetTotalRefundAmount(ctx, payment.ID)
+	if err != nil {
+		logger.L().Error("get total refund amount failed", zap.Error(err), zap.String("payment_no", payment.PaymentNo))
 	}
+
+	if totalRefunded >= payment.Amount {
+		if err := u.paymentRepo.UpdateStatus(ctx, payment.ID, entity.PaymentStatusRefunded); err != nil {
+			logger.L().Error("update payment status to refunded failed", zap.Error(err), zap.String("payment_no", payment.PaymentNo))
+		}
+	}
+
+	logger.L().Info("refund created",
+		zap.String("refund_no", refund.RefundNo),
+		zap.String("payment_no", payment.PaymentNo),
+		zap.Int64("amount", req.Amount),
+	)
 
 	return refund, nil
 }

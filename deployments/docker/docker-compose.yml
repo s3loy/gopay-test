@@ -4,6 +4,7 @@ services:
   postgres:
     image: postgres:16-alpine
     container_name: gopay-postgres
+    restart: unless-stopped
     environment:
       POSTGRES_USER: gopay
       POSTGRES_PASSWORD: gopay123
@@ -17,12 +18,19 @@ services:
       interval: 5s
       timeout: 5s
       retries: 5
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+        reservations:
+          memory: 256M
 
   api:
     build:
       context: ../..
       dockerfile: deployments/docker/Dockerfile
     container_name: gopay-api
+    restart: unless-stopped
     ports:
       - "8080:8080"
     environment:
@@ -35,18 +43,31 @@ services:
       postgres:
         condition: service_healthy
     command: ["-config", "/app/configs/config.yaml"]
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+        reservations:
+          memory: 128M
 
   web:
     build:
       context: ../../web
       dockerfile: Dockerfile
     container_name: gopay-web
+    restart: unless-stopped
     ports:
       - "3000:3000"
     environment:
       NEXT_PUBLIC_API_URL: http://api:8080
     depends_on:
       - api
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+        reservations:
+          memory: 256M
 
 volumes:
   postgres_data:

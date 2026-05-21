@@ -40,7 +40,9 @@ func main() {
 		fmt.Fprintf(os.Stderr, "init logger failed: %v\n", err)
 		os.Exit(1)
 	}
-	defer log.Sync()
+	defer func() {
+		_ = log.Sync() //nolint:errcheck // sync error is safe to ignore during shutdown
+	}()
 
 	// Init database
 	db, err := postgresql.NewDB(cfg.Database)
@@ -51,11 +53,11 @@ func main() {
 	// Init payment clients
 	wechatClient, err := wechat.NewClient(cfg.Payment.Wechat)
 	if err != nil {
-		logger.L().Fatal("init wechat client failed", zap.Error(err))
+		logger.L().Warn("init wechat client failed, wechat payment unavailable", zap.Error(err))
 	}
 	alipayClient, err := alipay.NewClient(cfg.Payment.Alipay)
 	if err != nil {
-		logger.L().Fatal("init alipay client failed", zap.Error(err))
+		logger.L().Warn("init alipay client failed, alipay payment unavailable", zap.Error(err))
 	}
 
 	// Init provider factory
@@ -66,10 +68,13 @@ func main() {
 	paymentRepo := postgresql.NewPaymentRepository(db)
 	refundRepo := postgresql.NewRefundRepository(db)
 
+	// Init transaction manager
+	txMgr := postgresql.NewTransactionManager(db)
+
 	// Init usecases
 	orderUC := usecase.NewOrderUsecase(orderRepo)
-	paymentUC := usecase.NewPaymentUsecase(orderRepo, paymentRepo, providerFact)
-	refundUC := usecase.NewRefundUsecase(paymentRepo, refundRepo, providerFact)
+	paymentUC := usecase.NewPaymentUsecase(orderRepo, paymentRepo, providerFact, txMgr)
+	refundUC := usecase.NewRefundUsecase(paymentRepo, refundRepo, providerFact, txMgr)
 
 	// Init handlers
 	orderHandler := handler.NewOrderHandler(orderUC)
@@ -79,7 +84,7 @@ func main() {
 	healthHandler := handler.NewHealthHandler()
 
 	// Init router
-	r := router.NewRouter(orderHandler, paymentHandler, refundHandler, webhookHandler, healthHandler)
+	r := router.NewRouter(orderHandler, paymentHandler, refundHandler, webhookHandler, healthHandler, cfg.App.CORSOrigins)
 
 	// Setup gin
 	if cfg.App.Env == "production" {
