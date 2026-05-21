@@ -176,4 +176,22 @@ func TestOrderUsecase_Close(t *testing.T) {
 			t.Fatal("expected error")
 		}
 	})
+
+	t.Run("order not found", func(t *testing.T) {
+		repo := &mockOrderRepo{err: apperror.New(apperror.CodeOrderNotFound, "not found")}
+		uc := NewOrderUsecase(repo)
+		err := uc.Close(context.Background(), "ORD999")
+		if err == nil {
+			t.Fatal("expected error")
+		}
+	})
+
+	t.Run("update status error", func(t *testing.T) {
+		repo := &mockOrderRepo{order: &entity.Order{ID: 1, OrderNo: "ORD123", Status: entity.OrderStatusPending}, err: errors.New("db error")}
+		uc := NewOrderUsecase(repo)
+		err := uc.Close(context.Background(), "ORD123")
+		if err == nil {
+			t.Fatal("expected error")
+		}
+	})
 }

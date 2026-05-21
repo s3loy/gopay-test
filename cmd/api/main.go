@@ -51,11 +51,11 @@ func main() {
 	// Init payment clients
 	wechatClient, err := wechat.NewClient(cfg.Payment.Wechat)
 	if err != nil {
-		logger.L().Fatal("init wechat client failed", zap.Error(err))
+		logger.L().Warn("init wechat client failed, wechat payment unavailable", zap.Error(err))
 	}
 	alipayClient, err := alipay.NewClient(cfg.Payment.Alipay)
 	if err != nil {
-		logger.L().Fatal("init alipay client failed", zap.Error(err))
+		logger.L().Warn("init alipay client failed, alipay payment unavailable", zap.Error(err))
 	}
 
 	// Init provider factory

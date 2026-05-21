@@ -13,13 +13,13 @@ import (
 
 // mockPaymentRepo for testing
 type mockPaymentRepo struct {
-	payment      *entity.Payment
-	payments     []*entity.Payment
-	err          error
-	created      *entity.Payment
-	updated      bool
+	payment       *entity.Payment
+	payments      []*entity.Payment
+	err           error
+	created       *entity.Payment
+	updated       bool
 	statusUpdated bool
-	totalRefund  int64
+	totalRefund   int64
 }
 
 func (m *mockPaymentRepo) Create(ctx context.Context, p *entity.Payment) error {
@@ -62,12 +62,12 @@ func (m *mockPaymentRepo) List(ctx context.Context, f repository.PaymentFilter) 
 
 // mockRefundRepo for testing
 type mockRefundRepo struct {
-	refund      *entity.Refund
-	err         error
-	created     *entity.Refund
-	updated     bool
+	refund        *entity.Refund
+	err           error
+	created       *entity.Refund
+	updated       bool
 	statusUpdated bool
-	totalAmount int64
+	totalAmount   int64
 }
 
 func (m *mockRefundRepo) Create(ctx context.Context, r *entity.Refund) error {
@@ -105,9 +105,9 @@ func (m *mockRefundRepo) List(ctx context.Context, f repository.RefundFilter) ([
 
 // mockProvider for testing
 type mockProvider struct {
-	result *service.ProviderPaymentResult
+	result       *service.ProviderPaymentResult
 	refundResult *service.ProviderRefundResult
-	err    error
+	err          error
 }
 
 func (m *mockProvider) Channel() entity.PaymentChannel { return entity.ChannelWechat }
@@ -277,6 +277,91 @@ func TestRefundUsecase_Create(t *testing.T) {
 		}
 		if !paymentRepo.statusUpdated {
 			t.Error("payment status should be updated to refunded")
+		}
+	})
+
+	t.Run("get total refund amount error", func(t *testing.T) {
+		payment := &entity.Payment{ID: 1, PaymentNo: "PAY123", Amount: 1000, Status: entity.PaymentStatusSuccess}
+		paymentRepo := &mockPaymentRepo{payment: payment}
+		refundRepo := &mockRefundRepo{err: errors.New("db error")}
+		factory := &mockProviderFactory{}
+		txMgr := &mockTxMgr{}
+
+		uc := NewRefundUsecase(paymentRepo, refundRepo, factory, txMgr)
+		_, err := uc.Create(context.Background(), CreateRefundRequest{PaymentNo: "PAY123", Amount: 500, Reason: "test"})
+		if err == nil {
+			t.Fatal("expected error")
+		}
+	})
+
+	t.Run("provider factory error", func(t *testing.T) {
+		payment := &entity.Payment{ID: 1, PaymentNo: "PAY123", Amount: 1000, Status: entity.PaymentStatusSuccess}
+		paymentRepo := &mockPaymentRepo{payment: payment}
+		refundRepo := &mockRefundRepo{totalAmount: 0}
+		factory := &mockProviderFactory{err: errors.New("factory error")}
+		txMgr := &mockTxMgr{}
+
+		uc := NewRefundUsecase(paymentRepo, refundRepo, factory, txMgr)
+		_, err := uc.Create(context.Background(), CreateRefundRequest{PaymentNo: "PAY123", Amount: 500, Reason: "test"})
+		if err == nil {
+			t.Fatal("expected error")
+		}
+	})
+
+	t.Run("refund repo create error", func(t *testing.T) {
+		payment := &entity.Payment{ID: 1, PaymentNo: "PAY123", Amount: 1000, Status: entity.PaymentStatusSuccess}
+		paymentRepo := &mockPaymentRepo{payment: payment}
+		refundRepo := &mockRefundRepo{totalAmount: 0}
+		refundRepo.err = errors.New("db error")
+		factory := &mockProviderFactory{provider: &mockProvider{}}
+		txMgr := &mockTxMgr{}
+
+		uc := NewRefundUsecase(paymentRepo, refundRepo, factory, txMgr)
+		_, err := uc.Create(context.Background(), CreateRefundRequest{PaymentNo: "PAY123", Amount: 500, Reason: "test"})
+		if err == nil {
+			t.Fatal("expected error")
+		}
+	})
+
+	t.Run("refund update after provider success error", func(t *testing.T) {
+		payment := &entity.Payment{ID: 1, PaymentNo: "PAY123", Amount: 1000, Status: entity.PaymentStatusSuccess}
+		paymentRepo := &mockPaymentRepo{payment: payment}
+		refundRepo := &mockRefundRepo{totalAmount: 0}
+		provider := &mockProvider{refundResult: &service.ProviderRefundResult{ThirdPartyNo: "RF001", Status: "SUCCESS"}}
+		factory := &mockProviderFactory{provider: provider}
+		txMgr := &mockTxMgr{}
+
+		uc := NewRefundUsecase(paymentRepo, refundRepo, factory, txMgr)
+		refund, err := uc.Create(context.Background(), CreateRefundRequest{PaymentNo: "PAY123", Amount: 500, Reason: "test"})
+		if err != nil {
+			t.Fatalf("Create() error = %v", err)
+		}
+		if refund.Status != entity.RefundStatusProcessing {
+			t.Errorf("Status = %v, want processing", refund.Status)
+		}
+	})
+}
+
+func TestRefundUsecase_Get(t *testing.T) {
+	t.Run("success", func(t *testing.T) {
+		refund := &entity.Refund{RefundNo: "REF123", Status: entity.RefundStatusSuccess}
+		refundRepo := &mockRefundRepo{refund: refund}
+		uc := NewRefundUsecase(nil, refundRepo, nil, nil)
+		got, err := uc.Get(context.Background(), "REF123")
+		if err != nil {
+			t.Fatalf("Get() error = %v", err)
+		}
+		if got.RefundNo != "REF123" {
+			t.Errorf("RefundNo = %s, want REF123", got.RefundNo)
+		}
+	})
+
+	t.Run("not found", func(t *testing.T) {
+		refundRepo := &mockRefundRepo{err: apperror.New(apperror.CodeRefundNotFound, "not found")}
+		uc := NewRefundUsecase(nil, refundRepo, nil, nil)
+		_, err := uc.Get(context.Background(), "REF999")
+		if err == nil {
+			t.Fatal("expected error")
 		}
 	})
 }

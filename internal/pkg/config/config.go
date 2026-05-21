@@ -18,10 +18,10 @@ type Config struct {
 }
 
 type AppConfig struct {
-	Name       string   `mapstructure:"name"`
-	Version    string   `mapstructure:"version"`
-	Env        string   `mapstructure:"env"`
-	Debug      bool     `mapstructure:"debug"`
+	Name        string   `mapstructure:"name"`
+	Version     string   `mapstructure:"version"`
+	Env         string   `mapstructure:"env"`
+	Debug       bool     `mapstructure:"debug"`
 	CORSOrigins []string `mapstructure:"cors_origins"`
 }
 

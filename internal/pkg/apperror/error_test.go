@@ -14,8 +14,8 @@ func TestNew(t *testing.T) {
 	if err.Message != "order not found" {
 		t.Errorf("Message = %s, want %s", err.Message, "order not found")
 	}
-	if err.HTTPStatus != http.StatusInternalServerError {
-		t.Errorf("HTTPStatus = %d, want %d", err.HTTPStatus, http.StatusInternalServerError)
+	if err.HTTPStatus != http.StatusNotFound {
+		t.Errorf("HTTPStatus = %d, want %d", err.HTTPStatus, http.StatusNotFound)
 	}
 }
 
